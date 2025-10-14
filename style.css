@@ -1,0 +1,272 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
+
+* {
+    font-family: "Poppins", sans-serif;
+    font-weight: 700;
+    color: var(--black);
+    box-sizing: border-box;
+}
+:root {
+    --primary-color: #000000;
+    --secondary-color: #FD653D;
+    --background: #f5f5f5;
+    --background-color-light: #e7e7ff5e;
+    --white: white;
+    --border-color: #E6EDFF;
+    --indigo-color: #FD653D;
+    --red-color: #FF3B30;
+    --green-color: #146356;
+    --orange-color: #FF9500;
+    --grey-color: #7C8DB5;
+    --border-grey-color: #7c8db547;
+    --font-family-1: "Exo", sans-serif;
+    --font-family-2: "Albert Sans", sans-serif;
+    --font-family-3: "Poppins", sans-serif;
+    --black: #09112c;
+    --aside-background-white: rgba(255, 255, 255, 0.457);
+    --normal_shaodow: 0px 0px 2px grey !important;
+}
+
+body {
+    color: var(--black);
+    line-height: 1.6;
+    max-width: 1500px !important;
+    margin: 0 auto;
+}
+
+div[data-test-connection-state="CONNECTED"] {
+    background: var(--background);
+}
+
+header,
+footer {
+    display: none !important;
+}
+
+div[data-testid="stFileUploader"] {
+    width: 100%;
+}
+
+div[data-testid="stFileUploader"] * {
+    padding: 0px;
+}
+
+div[data-testid="stFileUploader"] .st-emotion-cache-fis6aj {
+    padding-top: 10px;
+    border-top: 2px solid var(--border-grey-color);
+    border-top-style: dashed;
+    margin-top: 20px;
+}
+
+section[data-testid="stFileUploaderDropzone"]:has(input[data-testid="stFileUploaderDropzoneInput"]) {
+    background: var(--white) !important;
+    box-shadow: var(--normal_shaodow);
+    padding: 10px 10px !important;
+    padding-right: 15px !important;
+    border-radius: 10px !important;
+    cursor: pointer;
+    margin: 10px 0;
+}
+
+section[data-testid="stFileUploaderDropzone"]:has(input[data-testid="stFileUploaderDropzoneInput"]) button {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background: var(--black) !important;
+    border-radius: 10px;
+    white-space: nowrap;
+    padding: 15px 30px;
+    color: var(--white) !important;
+    letter-spacing: 1px;
+    font-size: small;
+    font-weight: 600;
+    border: none;
+    position: relative;
+    text-transform: capitalize;
+    outline: none;
+}
+
+section[data-testid="stFileUploaderDropzone"]:has(input[data-testid="stFileUploaderDropzoneInput"]) button:hover {
+    background: var(--indigo-color) !important;
+}
+
+section[data-testid="stFileUploaderDropzone"]:has(input[data-testid="stFileUploaderDropzoneInput"]) span:has(svg) {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 10px;
+    border-radius: 10px;
+    background: var(--indigo-color);
+}
+
+section[data-testid="stFileUploaderDropzone"]:has(input[data-testid="stFileUploaderDropzoneInput"]) span:has(svg) svg {
+    fill: var(--white);
+}
+
+section[data-testid="stFileUploaderDropzone"]:has(input[data-testid="stFileUploaderDropzoneInput"]) small {
+    font-weight: 500;
+}
+
+section[data-testid="stFileUploaderDropzone"]:has(input[data-testid="stFileUploaderDropzoneInput"]) * {
+    text-transform: capitalize;
+}
+
+p {
+    font-weight: 550;
+}
+
+div[data-testid="stFileUploaderFile"] {
+    background: var(--white);
+    box-shadow: var(--normal_shaodow);
+    padding: 10px;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+    border-radius: 10px;
+}
+
+div[data-testid="stFileUploaderFile"] div.stFileUploaderFileData {
+    width: 100% !important;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    height: 100%;
+    margin-top: 5px;
+}
+
+div[data-testid="stFileUploaderFile"] div.stFileUploaderFileData small {
+    margin-top: -5px;
+    padding-left: 10px;
+    border-left: 2px solid var(--border-grey-color);
+    border-left-style: dashed !important;
+    height: 100%;
+}
+
+div[data-testid="stFileUploaderDeleteBtn"] button {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 10px;
+    position: relative;
+    right: 5px;
+    background: var(--background) !important;
+    border-radius: 10px;
+    font-weight: 600;
+    box-shadow: inset var(--normal_shaodow);
+    color: var(--black) !important;
+}
+
+div.stFileUploaderFileName {
+    font-weight: 500;
+    color: var(--black);
+}
+
+div[data-testid="stFileUploaderFile"] .st-emotion-cache-10ix4kq:has(svg) {
+    background: var(--black);
+    border-radius: 10px;
+    padding: 10px;
+}
+
+div[data-testid="stFileUploaderFile"] .st-emotion-cache-10ix4kq:has(svg) svg {
+    fill: var(--white);
+}
+
+button[kind="secondary"] {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background: var(--black) !important;
+    border-radius: 10px;
+    white-space: nowrap;
+    padding: 15px 30px;
+    color: var(--white) !important;
+    border: none;
+    position: relative;
+    outline: none;
+}
+
+button[kind="secondary"] p {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    text-transform: capitalize;
+    letter-spacing: 1px;
+    font-size: small;
+    font-weight: 600;
+    color: var(--white);
+}
+button[kind="secondary"]:hover{
+    background: var(--indigo-color) !important;
+}
+div.stSelectbox{
+    background: var(--white);
+    padding: 15px;
+    box-shadow: var(--normal_shaodow);
+    border-radius: 7px;
+    display: flex;
+    justify-content: flex-start;
+    align-items: flex-start;
+    text-align: left;
+    gap: 5px;
+    flex-direction: column;
+}
+div[data-baseweb="select"] .st-au{
+    background: var(--background) !important;
+    box-shadow:var(--normal_shaodow);
+    color: var(--black) !important;
+    border-radius: 5px;
+    cursor: pointer;
+}
+div[data-baseweb="select"] *{
+    font-weight: 500 !important;
+    border: none !important;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    text-align: left;
+}
+li[role="option"] *{
+    font-weight: 500 !important;
+}
+.div[role="progressbar"] .st-dl{
+    background: var(--indigo-color);
+}
+.h1{
+    font-size: xx-large;
+}
+strong{
+    font-weight: 500 !important;
+}
+code{
+    background: var(--white) !important;
+    box-shadow: var(--normal_shaodow);
+    padding: 10px;
+    margin-right: 10px;
+}
+div[data-testid="stNumberInputContainer"] {
+    border:3px solid rgba(128, 128, 128, 0.082) !important;
+    outline: none;
+}
+div[data-testid="stNumberInputContainer"] input{
+    background: var(--white);
+}
+button[data-testid="stNumberInputStepUp"]{
+    background: var(--black) !important;
+    
+}
+button[data-testid="stNumberInputStepDown"]{
+    background: var(--indigo-color) !important;
+    
+}
+button[data-testid="stNumberInputStepUp"] * ,button[data-testid="stNumberInputStepDown"] *{
+    color: var(--white);
+}
