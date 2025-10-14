@@ -11,29 +11,26 @@ from io import BytesIO
 from urllib.parse import urljoin, urlparse
 from collections import deque
 
-# Load CSS
+# --- CSS Loader ---
 def load_css():
     try:
         with open("style.css") as f:
-            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
     except:
-        st.warning("No CSS loaded.")
+        pass
 
 load_css()
 
-# --- Improved Email Regex ---
+# --- Regex Patterns ---
 EMAIL_REGEX = re.compile(
-    r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.(?:com|org|net|edu|gov|io|co|us|uk|ca|de|au|biz|info|ai|app|in|pk|nl|fr|it|es|se|ch|no|dk|pl|be|cz|at|ru|jp|cn|sg|hk|my|id|ph|za|br|mx|tr|ar|vn|gr|ro|pt|fi|ir|sa|nz)\b",
-    re.IGNORECASE
+    r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.(?:com|org|net|edu|gov|io|co|us|uk|ca|de|au|biz|info|ai|app|in|pk|nl|fr|it|es|se|ch|no|dk|pl|be|cz|at|ru|jp|cn|sg|hk|my|id|ph|za|br|mx|tr|ar|vn|gr|ro|pt|fi|ir|sa|nz)",
+    re.IGNORECASE,
 )
 FACEBOOK_REGEX = re.compile(r"https?://(www\.)?facebook\.com/[a-zA-Z0-9_\-./]+")
 LINKEDIN_REGEX = re.compile(r"https?://(www\.)?linkedin\.com/[a-zA-Z0-9_\-./]+")
 PRIVACY_EMAIL_REGEX = re.compile(r"(privacy|dpo|data\.protection|gdpr|compliance)@", re.IGNORECASE)
 
-# Excluded sample emails
-excluded_emails = {...}  # Keep your excluded list unchanged
-
-# Save and Load local data
+# --- Helpers ---
 def save_to_local_storage(data):
     with open("local_storage.json", "w") as f:
         json.dump(data, f)
@@ -50,20 +47,18 @@ def download_partial_results(results, filename="partial_results.csv"):
         df.to_csv(filename, index=False)
         st.download_button("Download Partial Data", df.to_csv(index=False), filename, "text/csv")
 
-# --- Main Crawler ---
+# --- Extractor Core ---
 async def crawl_website(url, session, semaphore, status, results, email_df_container, unique_emails, max_pages):
     collected_emails = set()
     facebook_url = ""
     linkedin_url = ""
     visited_urls = set()
     urls_to_visit = deque([(url, 0)])
-    max_depth = 3
     base_domain = urlparse(url).netloc
-    priority_paths = ["/contact", "/about", "/team", "/contact-us", "/get-in-touch", "/support"]
+    priority_paths = ["/contact", "/about", "/team", "/support", "/get-in-touch", "/contact-us"]
 
-    try:
-        async with semaphore:
-            # Add priority paths
+    async with semaphore:
+        try:
             for path in priority_paths:
                 full_url = urljoin(url, path)
                 if full_url not in visited_urls:
@@ -71,90 +66,82 @@ async def crawl_website(url, session, semaphore, status, results, email_df_conta
 
             while urls_to_visit and len(visited_urls) < max_pages:
                 current_url, depth = urls_to_visit.popleft()
-                if current_url in visited_urls or depth > max_depth:
+                if current_url in visited_urls or depth > 3:
                     continue
 
                 visited_urls.add(current_url)
-                status['current'] = current_url
+                status["current"] = current_url
 
                 try:
                     async with session.get(current_url, timeout=10) as response:
                         if response.status != 200:
                             continue
-                        html = await response.text()
+                        html = await response.text(errors="ignore")
                         soup = BeautifulSoup(html, "html.parser")
+
+                        # Remove script/style
                         for tag in soup(["script", "style", "noscript"]):
                             tag.decompose()
 
-                        # --- Smart text cleanup ---
                         text = soup.get_text(separator=" ")
-                        # Fix merged endings like ".comThis" or ".ioContact"
-                        text = re.sub(r"(\.[a-z]{2,})([A-Z])", r"\1 \2", text)
-                        text = re.sub(r"(\.[a-z]{2,})([a-z])", r"\1 \2", text)
 
-                        # --- Extract emails ---
-                        found_emails = EMAIL_REGEX.findall(text)
+                        # --- Extract from text + mailto links ---
+                        found_emails = set(EMAIL_REGEX.findall(text))
+                        mailto_links = {
+                            a["href"].replace("mailto:", "")
+                            for a in soup.find_all("a", href=True)
+                            if "mailto:" in a["href"]
+                        }
+                        found_emails.update(mailto_links)
 
-                        # --- Post-cleanup ---
+                        # --- Clean emails ---
                         cleaned_emails = set()
                         for email in found_emails:
                             email = email.strip(".,;:()[]{}<>\"'! ")
-                            email = re.sub(r"(\.[a-z]{2,})([A-Za-z]+)$", r"\1", email)
-                            if re.fullmatch(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", email):
-                                cleaned_emails.add(email.lower())
+                            if not PRIVACY_EMAIL_REGEX.search(email):
+                                if re.fullmatch(EMAIL_REGEX, email):
+                                    cleaned_emails.add(email.lower())
 
-                        filtered_emails = {
-                            email for email in cleaned_emails
-                            if email.lower() not in {e.lower() for e in excluded_emails}
-                            and not PRIVACY_EMAIL_REGEX.search(email.lower())
-                        }
+                        collected_emails.update(cleaned_emails)
+                        unique_emails.update(cleaned_emails)
 
-                        collected_emails.update(filtered_emails)
-                        unique_emails.update(filtered_emails)
-
-                        # --- Social links ---
+                        # --- Social Links ---
                         if not facebook_url:
-                            match_fb = FACEBOOK_REGEX.search(html)
-                            if match_fb:
-                                facebook_url = match_fb.group()
-
+                            fb_match = FACEBOOK_REGEX.search(html)
+                            if fb_match:
+                                facebook_url = fb_match.group()
                         if not linkedin_url:
-                            match_ln = LINKEDIN_REGEX.search(html)
-                            if match_ln:
-                                linkedin_url = match_ln.group()
+                            ln_match = LINKEDIN_REGEX.search(html)
+                            if ln_match:
+                                linkedin_url = ln_match.group()
 
-                        # --- Crawl new internal links ---
+                        # --- Crawl internal links ---
                         for a_tag in soup.find_all("a", href=True):
                             href = a_tag["href"]
                             full_url = urljoin(current_url, href)
-                            parsed_url = urlparse(full_url)
-                            if parsed_url.netloc == base_domain and full_url not in visited_urls:
+                            parsed = urlparse(full_url)
+                            if parsed.netloc == base_domain and full_url not in visited_urls:
                                 urls_to_visit.append((full_url, depth + 1))
 
                 except Exception:
                     continue
 
-    except Exception:
-        pass
-    finally:
-        email_str = "No Email Found" if not collected_emails else " * ".join(sorted(collected_emails))
-        facebook_str = facebook_url if facebook_url else "No Facebook Found"
-        linkedin_str = linkedin_url if linkedin_url else "No LinkedIn Found"
+        except Exception:
+            pass
+        finally:
+            result = {
+                "Website": url,
+                "Emails": " * ".join(sorted(collected_emails)) if collected_emails else "No Email Found",
+                "Facebook URL": facebook_url if facebook_url else "No Facebook Found",
+                "LinkedIn URL": linkedin_url if linkedin_url else "No LinkedIn Found",
+                "Pages Scanned": len(visited_urls),
+            }
+            results.append(result)
+            save_to_local_storage(results)
+            email_df_container.dataframe(pd.DataFrame(results))
+            status["scanned"] += 1
 
-        result = {
-            "Website": url,
-            "Emails": email_str,
-            "Facebook URL": facebook_str,
-            "LinkedIn URL": linkedin_str,
-            "Pages Scanned": len(visited_urls)
-        }
-
-        results.append(result)
-        save_to_local_storage(results)
-        email_df_container.dataframe(pd.DataFrame(results))
-        status['scanned'] += 1
-
-# --- Async Processor ---
+# --- Async Runner ---
 async def process_all_urls(urls, status, results, email_df_container, unique_emails, max_pages):
     semaphore = asyncio.Semaphore(5)
     async with aiohttp.ClientSession() as session:
@@ -164,7 +151,7 @@ async def process_all_urls(urls, status, results, email_df_container, unique_ema
         ]
         await asyncio.gather(*tasks)
 
-# --- Download Utility ---
+# --- Download Data ---
 def prepare_download_data(results):
     df = pd.DataFrame(results)
     output = BytesIO()
@@ -172,24 +159,19 @@ def prepare_download_data(results):
     return output.getvalue(), "text/csv", "emails_social_links.csv"
 
 # --- Streamlit UI ---
-uploaded_file = st.file_uploader("Upload CSV or Excel File With URLs", type=["csv", "xlsx"])
+st.title("📧 Smart Email Extractor (Async + Streamlit)")
+uploaded_file = st.file_uploader("Upload CSV or Excel file with URLs", type=["csv", "xlsx"])
 
 if uploaded_file:
     try:
         df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith(".csv") else pd.read_excel(uploaded_file)
-        st.success("File Loaded")
+        st.success("✅ File Loaded Successfully")
         st.write("**Preview:**", df.head())
 
         url_column = st.selectbox("Select URL Column", df.columns)
-        max_pages = st.number_input("Maximum Pages to Scrape per Website", min_value=1, max_value=100, value=20, step=1)
-        st.markdown("""
-<style>* {margin: 0px; padding: 0px;}</style>
-<p>The Number of maximum pages is directly proportional to the speed of Tool.</p>
-<p>∴ Max Pages ∝ Tool Speed ∝ Emails Efficiency</p>
-<p style='color:var(--indigo-color);'>- Developer</p>
-""", unsafe_allow_html=True)
+        max_pages = st.number_input("Maximum Pages to Scan per Website", min_value=1, max_value=100, value=15)
 
-        if st.button("Start Extraction"):
+        if st.button("🚀 Start Extraction"):
             url_list = df[url_column].dropna().astype(str).tolist()
             total_urls = len(url_list)
             status = {"scanned": 0, "current": ""}
@@ -202,7 +184,6 @@ if uploaded_file:
             estimate_time_display = st.empty()
             email_df_container = st.empty()
             valid_count_display = st.empty()
-
             start_time = time.time()
 
             async def update_ui():
@@ -214,10 +195,10 @@ if uploaded_file:
                     mins, secs = divmod(int(remaining), 60)
 
                     progress.progress(min(percent, 100))
-                    status_msg.markdown(f"Scanned Websites: **{status['scanned']} / {total_urls}**")
-                    current_url_display.markdown(f"Currently Scanning: `{status['current']}`")
-                    valid_count_display.markdown(f"Valid Emails Extracted: **{len(unique_emails)}**")
-                    estimate_time_display.markdown(f"Estimated Time Remaining: **{mins} min {secs} sec**")
+                    status_msg.markdown(f"**Scanned Websites:** {status['scanned']} / {total_urls}")
+                    current_url_display.markdown(f"**Currently Scanning:** `{status['current']}`")
+                    valid_count_display.markdown(f"**Emails Found So Far:** {len(unique_emails)}")
+                    estimate_time_display.markdown(f"**Estimated Time Remaining:** {mins}m {secs}s")
                     await asyncio.sleep(0.5)
 
             async def main_runner():
@@ -226,21 +207,18 @@ if uploaded_file:
                     update_ui()
                 )
 
-            with st.spinner("Extracting..."):
+            with st.spinner("🔍 Extracting emails... please wait"):
                 try:
                     asyncio.run(main_runner())
                 except Exception as e:
-                    st.error("Crash detected. Auto-saving current results.")
+                    st.error("⚠️ Crash detected — auto-saving current results.")
                     download_partial_results(results)
                     raise e
 
-            st.success(f"Completed: {len(unique_emails)} unique emails found in {status['scanned']} websites scanned.")
+            st.success(f"✅ Completed: {len(unique_emails)} total emails found from {status['scanned']} websites.")
             st.markdown("---")
-            st.subheader("Download Full Results")
             file_data, mime_type, file_name = prepare_download_data(results)
-            st.download_button("Download CSV", file_data, file_name, mime_type)
+            st.download_button("⬇️ Download Results", file_data, file_name, mime_type)
 
     except Exception as e:
-        st.error(f"Error while processing file: {e}")
-else:
-    st.write("")
+        st.error(f"Error: {e}")
