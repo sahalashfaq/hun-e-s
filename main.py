@@ -131,9 +131,9 @@ async def crawl_website(url, session, semaphore, status, results, email_df_conta
         finally:
             result = {
                 "Website": url,
-                "Emails": " * ".join(sorted(collected_emails)) if collected_emails else "No Email Found",
-                "Facebook URL": facebook_url if facebook_url else "No Facebook Found",
-                "LinkedIn URL": linkedin_url if linkedin_url else "No LinkedIn Found",
+                "Emails Found": " * ".join(sorted(collected_emails)) if collected_emails else "No Email Found",
+                "Facebook Link": facebook_url if facebook_url else "No Facebook Found",
+                "LinkedIn Link": linkedin_url if linkedin_url else "No LinkedIn Found",
                 "Pages Scanned": len(visited_urls),
             }
             results.append(result)
@@ -164,13 +164,13 @@ uploaded_file = st.file_uploader("Upload CSV or Excel file with URLs", type=["cs
 if uploaded_file:
     try:
         df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith(".csv") else pd.read_excel(uploaded_file)
-        st.success("✅ File Loaded Successfully")
-        st.write("**Preview:**", df.head())
+        st.success("File Loaded Successfully")
+        st.write("Preview:", df.head())
 
         url_column = st.selectbox("Select URL Column", df.columns)
         max_pages = st.number_input("Maximum Pages to Scan per Website", min_value=1, max_value=100, value=15)
 
-        if st.button("🚀 Start Extraction"):
+        if st.button("Start Extraction"):
             url_list = df[url_column].dropna().astype(str).tolist()
             total_urls = len(url_list)
             status = {"scanned": 0, "current": ""}
@@ -206,18 +206,18 @@ if uploaded_file:
                     update_ui()
                 )
 
-            with st.spinner("🔍 Extracting emails... please wait"):
+            with st.spinner("Extracting emails and social links... please wait"):
                 try:
                     asyncio.run(main_runner())
                 except Exception as e:
-                    st.error("⚠️ Crash detected — auto-saving current results.")
+                    st.error("Crash detected — auto-saving current results.")
                     download_partial_results(results)
                     raise e
 
-            st.success(f"✅ Completed: {len(unique_emails)} total emails found from {status['scanned']} websites.")
+            st.success(f"Completed: {len(unique_emails)} total emails found from {status['scanned']} websites.")
             st.markdown("---")
             file_data, mime_type, file_name = prepare_download_data(results)
-            st.download_button("⬇️ Download Results", file_data, file_name, mime_type)
+            st.download_button("Download Results", file_data, file_name, mime_type)
 
     except Exception as e:
         st.error(f"Error: {e}")
