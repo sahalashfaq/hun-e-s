@@ -159,7 +159,6 @@ def prepare_download_data(results):
     return output.getvalue(), "text/csv", "emails_social_links.csv"
 
 # --- Streamlit UI ---
-st.title("📧 Smart Email Extractor (Async + Streamlit)")
 uploaded_file = st.file_uploader("Upload CSV or Excel file with URLs", type=["csv", "xlsx"])
 
 if uploaded_file:
