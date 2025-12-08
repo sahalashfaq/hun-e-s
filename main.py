@@ -10,6 +10,19 @@ from bs4 import BeautifulSoup
 from io import BytesIO
 from urllib.parse import urljoin, urlparse
 from collections import deque
+import hashlib
+
+# --- Initialize Session State ---
+if 'scraping_results' not in st.session_state:
+    st.session_state.scraping_results = []
+if 'unique_emails' not in st.session_state:
+    st.session_state.unique_emails = set()
+if 'uploaded_file_hash' not in st.session_state:
+    st.session_state.uploaded_file_hash = None
+if 'current_file_name' not in st.session_state:
+    st.session_state.current_file_name = None
+if 'scraping_complete' not in st.session_state:
+    st.session_state.scraping_complete = False
 
 # --- CSS Loader ---
 def load_css():
@@ -30,22 +43,49 @@ FACEBOOK_REGEX = re.compile(r"https?://(www\.)?facebook\.com/[a-zA-Z0-9_\-./]+")
 LINKEDIN_REGEX = re.compile(r"https?://(www\.)?linkedin\.com/[a-zA-Z0-9_\-./]+")
 PRIVACY_EMAIL_REGEX = re.compile(r"(privacy|dpo|data\.protection|gdpr|compliance)@", re.IGNORECASE)
 
-# --- Helpers ---
-def save_to_local_storage(data):
-    with open("local_storage.json", "w") as f:
-        json.dump(data, f)
+# --- Persistent Storage ---
+def save_to_persistent_storage():
+    """Save results to both session state and local storage"""
+    # Convert set to list for JSON serialization
+    data_to_save = {
+        'results': st.session_state.scraping_results,
+        'unique_emails': list(st.session_state.unique_emails),
+        'file_name': st.session_state.current_file_name,
+        'file_hash': st.session_state.uploaded_file_hash
+    }
+    
+    # Save to file
+    with open("persistent_storage.json", "w") as f:
+        json.dump(data_to_save, f)
+    
+    # Also save to session state
+    st.session_state.persisted_data = data_to_save
 
-def load_from_local_storage():
-    if os.path.exists("local_storage.json"):
-        with open("local_storage.json", "r") as f:
-            return json.load(f)
-    return []
+def load_from_persistent_storage():
+    """Load results from persistent storage"""
+    if os.path.exists("persistent_storage.json"):
+        with open("persistent_storage.json", "r") as f:
+            data = json.load(f)
+            
+            # Restore to session state
+            st.session_state.scraping_results = data.get('results', [])
+            st.session_state.unique_emails = set(data.get('unique_emails', []))
+            st.session_state.current_file_name = data.get('file_name')
+            st.session_state.uploaded_file_hash = data.get('file_hash')
+            st.session_state.scraping_complete = len(st.session_state.scraping_results) > 0
+            
+            return True
+    return False
 
-def download_partial_results(results, filename="partial_results.csv"):
-    if results:
-        df = pd.DataFrame(results)
-        df.to_csv(filename, index=False)
-        st.download_button("Download Partial Data", df.to_csv(index=False), filename, "text/csv")
+def calculate_file_hash(file_content):
+    """Calculate hash of uploaded file to detect changes"""
+    return hashlib.md5(file_content).hexdigest()
+
+def reset_scraping_state():
+    """Reset scraping state for new file"""
+    st.session_state.scraping_results = []
+    st.session_state.unique_emails = set()
+    st.session_state.scraping_complete = False
 
 # --- Extractor Core ---
 async def crawl_website(url, session, semaphore, status, results, email_df_container, unique_emails, max_pages):
@@ -137,8 +177,12 @@ async def crawl_website(url, session, semaphore, status, results, email_df_conta
                 "Pages Scanned": len(visited_urls),
             }
             results.append(result)
-            save_to_local_storage(results)
-            email_df_container.dataframe(pd.DataFrame(results))
+            # Save to persistent storage after each website
+            save_to_persistent_storage()
+            
+            # Update dataframe display
+            if email_df_container:
+                email_df_container.dataframe(pd.DataFrame(results))
             status["scanned"] += 1
 
 # --- Async Runner ---
@@ -152,31 +196,88 @@ async def process_all_urls(urls, status, results, email_df_container, unique_ema
         await asyncio.gather(*tasks)
 
 # --- Download Data ---
-def prepare_download_data(results):
-    df = pd.DataFrame(results)
+def prepare_download_data():
+    """Prepare data for download from session state"""
+    df = pd.DataFrame(st.session_state.scraping_results)
     output = BytesIO()
     df.to_csv(output, index=False)
     return output.getvalue(), "text/csv", "emails_social_links.csv"
 
+# --- Load persistent data on startup ---
+load_from_persistent_storage()
+
 # --- Streamlit UI ---
-uploaded_file = st.file_uploader("Upload CSV or Excel file with URLs", type=["csv", "xlsx"])
+st.title("Website Email & Social Link Extractor")
+
+# Display existing results if available
+if st.session_state.scraping_complete and st.session_state.scraping_results:
+    st.info(f"📊 Found {len(st.session_state.scraping_results)} previously scraped results")
+    
+    # Show results summary
+    df_previous = pd.DataFrame(st.session_state.scraping_results)
+    st.dataframe(df_previous)
+    
+    # Download button for existing data
+    file_data, mime_type, file_name = prepare_download_data()
+    col1, col2 = st.columns(2)
+    with col1:
+        st.download_button(
+            "📥 Download Existing Results", 
+            file_data, 
+            file_name, 
+            mime_type,
+            key="download_existing"
+        )
+    with col2:
+        if st.button("🗑️ Clear Existing Results"):
+            reset_scraping_state()
+            save_to_persistent_storage()
+            st.rerun()
+
+st.markdown("---")
+
+# File uploader
+uploaded_file = st.file_uploader(
+    "Upload CSV or Excel file with URLs", 
+    type=["csv", "xlsx"],
+    help="Upload a new file to start fresh scraping"
+)
 
 if uploaded_file:
+    # Calculate file hash to detect if it's a new file
+    file_content = uploaded_file.getvalue()
+    file_hash = calculate_file_hash(file_content)
+    
+    # Check if this is a new file
+    is_new_file = (file_hash != st.session_state.uploaded_file_hash)
+    
+    if is_new_file:
+        reset_scraping_state()
+        st.session_state.uploaded_file_hash = file_hash
+        st.session_state.current_file_name = uploaded_file.name
+    
     try:
+        # Reset file pointer
+        uploaded_file.seek(0)
+        
+        # Read file
         df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith(".csv") else pd.read_excel(uploaded_file)
-        st.success("File Loaded Successfully")
+        st.success(f"✅ File Loaded: {uploaded_file.name}")
         st.write("Preview:", df.head())
 
         url_column = st.selectbox("Select URL Column", df.columns)
         max_pages = st.number_input("Maximum Pages to Scan per Website", min_value=1, max_value=100, value=15)
+        
+        # Show warning if resuming with existing data
+        if st.session_state.scraping_results and not is_new_file:
+            st.warning(f"⚠️ Found {len(st.session_state.scraping_results)} previously scraped results. New scraping will add to existing data.")
 
-        if st.button("Start Extraction"):
+        if st.button("Start Extraction", type="primary"):
             url_list = df[url_column].dropna().astype(str).tolist()
             total_urls = len(url_list)
             status = {"scanned": 0, "current": ""}
-            unique_emails = set()
-            results = []
-
+            
+            # Initialize containers
             progress = st.progress(0)
             status_msg = st.empty()
             current_url_display = st.empty()
@@ -196,28 +297,104 @@ if uploaded_file:
                     progress.progress(min(percent, 100))
                     status_msg.markdown(f"**Scanned Websites:** {status['scanned']} / {total_urls}")
                     current_url_display.markdown(f"**Currently Scanning:** `{status['current']}`")
-                    valid_count_display.markdown(f"**Emails Found So Far:** {len(unique_emails)}")
+                    valid_count_display.markdown(f"**Emails Found So Far:** {len(st.session_state.unique_emails)}")
                     estimate_time_display.markdown(f"**Estimated Time Remaining:** {mins}m {secs}s")
                     await asyncio.sleep(0.5)
 
             async def main_runner():
                 await asyncio.gather(
-                    process_all_urls(url_list, status, results, email_df_container, unique_emails, max_pages),
+                    process_all_urls(
+                        url_list, 
+                        status, 
+                        st.session_state.scraping_results, 
+                        email_df_container, 
+                        st.session_state.unique_emails, 
+                        max_pages
+                    ),
                     update_ui()
                 )
 
             with st.spinner("Extracting emails and social links... please wait"):
                 try:
                     asyncio.run(main_runner())
+                    st.session_state.scraping_complete = True
+                    save_to_persistent_storage()
+                    
                 except Exception as e:
-                    st.error("Crash detected — auto-saving current results.")
-                    download_partial_results(results)
+                    st.error("Error during extraction — saving current results.")
+                    save_to_persistent_storage()
                     raise e
 
-            st.success(f"Completed: {len(unique_emails)} total emails found from {status['scanned']} websites.")
+            # Final results
+            st.success(f"✅ Completed: {len(st.session_state.unique_emails)} total emails found from {status['scanned']} websites.")
             st.markdown("---")
-            file_data, mime_type, file_name = prepare_download_data(results)
-            st.download_button("Download Results", file_data, file_name, mime_type)
+            
+            # Display final results
+            if st.session_state.scraping_results:
+                final_df = pd.DataFrame(st.session_state.scraping_results)
+                st.dataframe(final_df)
+                
+                # Download button
+                file_data, mime_type, file_name = prepare_download_data()
+                st.download_button(
+                    "📥 Download Results", 
+                    file_data, 
+                    file_name, 
+                    mime_type,
+                    key="download_final"
+                )
 
     except Exception as e:
         st.error(f"Error: {e}")
+
+# Sidebar for additional options
+with st.sidebar:
+    st.header("Data Management")
+    
+    if st.session_state.scraping_complete:
+        st.success("✅ Data available for download")
+        
+        # Show statistics
+        st.subheader("Statistics")
+        st.write(f"Total Websites: {len(st.session_state.scraping_results)}")
+        st.write(f"Unique Emails: {len(st.session_state.unique_emails)}")
+        
+        # Export options
+        st.subheader("📤 Export Options")
+        
+        if st.button("Export to JSON"):
+            data_to_export = {
+                'results': st.session_state.scraping_results,
+                'unique_emails': list(st.session_state.unique_emails),
+                'metadata': {
+                    'export_date': time.strftime("%Y-%m-%d %H:%M:%S"),
+                    'total_websites': len(st.session_state.scraping_results),
+                    'total_emails': len(st.session_state.unique_emails)
+                }
+            }
+            
+            json_str = json.dumps(data_to_export, indent=2)
+            st.download_button(
+                "Download JSON",
+                json_str,
+                "scraping_results.json",
+                "application/json"
+            )
+    
+    # Clear all data
+    st.markdown("---")
+    if st.button("Clear All Data", type="secondary"):
+        reset_scraping_state()
+        st.session_state.uploaded_file_hash = None
+        st.session_state.current_file_name = None
+        
+        # Clear persistent storage file
+        if os.path.exists("persistent_storage.json"):
+            os.remove("persistent_storage.json")
+        
+        st.success("All data cleared!")
+        st.rerun()
+
+# Footer
+st.markdown("---")
+st.caption("🔒 Data is automatically saved and persists across sessions")
