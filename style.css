@@ -381,3 +381,6 @@ div[data-baseweb="progress-bar"] .st-bb .st-bb{
 div[data-baseweb="notification"] {
     backdrop-filter: blur(10px);
 }
+.stSidebar{
+    display: none;
+}
