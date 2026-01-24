@@ -11,7 +11,14 @@ from io import BytesIO
 from urllib.parse import urljoin, urlparse
 from collections import deque
 import hashlib
-
+# --- CSS Loader ---
+def load_css():
+    try:
+        with open("style.css") as f:
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+    except:
+        pass
+load_css()
 # ── Session State ───────────────────────────────────────────────
 defaults = {
     'scraping_results': [],
