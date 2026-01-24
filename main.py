@@ -23,7 +23,14 @@ defaults = {
 for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
+def load_css():
+    try:
+        with open("style.css", encoding="utf-8") as f:
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+    except FileNotFoundError:
+        st.warning("style.css not found — using fallback style")
 
+load_css()
 # ── CSS (you can keep your style.css or use this minimal version) ──
 st.markdown("""
     <style>
